@@ -7,7 +7,7 @@ lxc-ipnotes is a simple script to add ips to notes of LXC containers.
 ## Installation
 
 ```sh
-curl -sL https://github.com/domgregori/lxc-ipnotes/raw/main/install.sh | sudo bash
+curl -sL https://github.com/domgregori/lxc-ipnotes/raw/main/install.sh | bash
 ```
 
 ## Configure
