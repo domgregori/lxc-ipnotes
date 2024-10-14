@@ -58,7 +58,7 @@ main() {
             # Get notes
             old_full_note=$(pct config "${lxc_name}" | grep description | sed 's/^description:\ //')
             old_notes=$(echo "${old_full_note}" | grep 'IPs: ' | sed 's/IPs:\ //' | sed 's/;/ /g')
-            old_full_note=$(echo "${old_full_note}" | sed -z 's/###Do Not Edit Under This###.*//')
+            old_full_note=$(echo "${old_full_note}" | sed -z 's/\(<br>\)*###Do Not Edit Under This###.*//')
             for old_notes in ${old_notes}; do
                 if is_valid_ipv4 "${old_notes}"; then
                     old_ips+=("${old_notes}")
