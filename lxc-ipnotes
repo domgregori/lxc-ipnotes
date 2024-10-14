@@ -1,0 +1,97 @@
+#!/bin/bash
+
+cidr_list=(
+    192.168.0.0/16
+    100.64.0.0/10
+    10.0.0.0/8
+)
+
+ip_to_int() {
+    local ip="${1}"
+    local a b c d
+    IFS=. read -r a b c d <<< "${ip}"
+    echo "$((a << 24 | b << 16 | c << 8 | d))"
+}
+
+ip_in_cidr() {
+    local ip="${1}"
+    local cidr="${2}"
+    ip_int=$(ip_to_int "${ip}")
+    netmask_int=$(ip_to_int "$(ipcalc -b "${cidr}" | grep Broadcast | awk '{print $2}')")
+    masked_ip_int=$(( "${ip_int}" & "${netmask_int}" ))
+    [[ ${ip_int} -eq ${masked_ip_int} ]] && return 0 || return 1
+}
+
+ip_in_cidrs() {
+    local ip="${1}"
+    for cidr in "${cidr_list[@]}"; do
+        ip_in_cidr "${ip}" "${cidr}" && return 0
+    done
+    return 1
+}
+
+is_valid_ipv4() {
+    local ip=$1
+    local regex="^([0-9]{1,3}\.){3}[0-9]{1,3}$"
+    if [[ $ip =~ $regex ]]; then
+        IFS='.' read -r -a parts <<< "$ip"
+        for part in "${parts[@]}"; do
+            if ! [[ $part =~ ^[0-9]+$ ]] || ((part < 0 || part > 255)); then
+                return 1
+            fi
+        done
+        return 0
+    else
+        return 1
+    fi
+}
+
+main() {
+    while true; do
+        # Set the IP notes for all LXC containers
+        lxc_name_list=$(pct list 2>/dev/null | grep -v VMID | awk '{print $1}')
+        for lxc_name in ${lxc_name_list}; do
+            new_notes=()
+            old_ips=()
+            new_ips=()
+
+            # Get notes
+            old_full_note=$(pct config "${lxc_name}" | grep description | sed 's/^description:\ //')
+            old_notes=$(echo "${old_full_note}" | grep 'IPs: ' | sed 's/IPs:\ //' | sed 's/;/ /g')
+            old_full_note=$(echo "${old_full_note}" | sed -z 's/###Do Not Edit Under This###.*//')
+            for old_notes in ${old_notes}; do
+                if is_valid_ipv4 "${old_notes}"; then
+                    old_ips+=("${old_notes}")
+                    continue
+                fi
+                new_notes+=("${old_notes}")
+            done
+
+            # Get the valid IPv4s
+            ips=$(lxc-info -n "${lxc_name}" -i | awk '{print $2}')
+            for ip in ${ips}; do
+                if is_valid_ipv4 "${ip}" && ip_in_cidrs "${ip}"; then
+                    new_ips+=("${ip}")
+                    new_notes+=("${ip}")
+                fi
+            done
+
+            # Skip if no change
+            if [[ "$(echo "${old_ips[@]}" | tr ' ' '\n' | sort -u)" == "$(echo "${new_ips[@]}" | tr ' ' '\n' | sort -u)" ]]; then
+                echo "Skipping ${lxc_name} cause ip no changes"
+                continue
+            fi
+
+            # Set the notes
+            joined_notes="${old_full_note}\n"
+            joined_notes+="###Do Not Edit Under This###\n"
+            joined_notes+="IPs: "
+            joined_notes+=$(IFS=';'; echo "${new_notes[*]}")
+            echo "Setting ${lxc_name} notes from ${old_notes} to ${joined_notes}"
+            pct set "${lxc_name}" -description "${joined_notes}"
+        done
+        sleep 60
+    done
+}
+
+main
