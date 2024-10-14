@@ -83,11 +83,11 @@ main() {
             fi
 
             # Set the notes
-            joined_notes="${old_full_note}\n"
-            joined_notes+="###Do Not Edit Under This###\n"
+            joined_notes="${old_full_note}<br>"
+            joined_notes+="###Do Not Edit Under This###<br>"
             joined_notes+="IPs: "
             joined_notes+=$(IFS=';'; echo "${new_notes[*]}")
-            echo "Setting ${lxc_name} notes from ${old_notes} to ${joined_notes}"
+            echo "Setting ${lxc_name} notes"
             pct set "${lxc_name}" -description "${joined_notes}"
         done
         sleep 60
